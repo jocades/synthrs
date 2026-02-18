@@ -13,7 +13,7 @@ pub enum OscKind {
 pub struct Osc {
     kind: OscKind,
     phase: f64, // 0..1
-    increment: f64,
+    pub increment: f64,
     gain: f64, // 0..1
 }
 
@@ -27,8 +27,9 @@ impl Osc {
         }
     }
 
-    pub fn next(&mut self) -> f64 {
+    pub fn next(&mut self, scale: f64) -> f64 {
         let p = self.phase;
+
         let out = match self.kind {
             OscKind::Sine => (p * TAU).sin(),
             OscKind::Square => {
@@ -42,11 +43,40 @@ impl Osc {
             OscKind::Saw => 2.0 * p - 1.0,
         };
 
-        self.phase += self.increment;
+        self.phase += self.increment * scale;
+        // self.phase -= self.phase.floor();
         if self.phase >= 1.0 {
             self.phase -= 1.0
         }
 
         out * self.gain
+    }
+}
+
+#[derive(Default)]
+pub struct Lfo {
+    phase: f64,
+    increment: f64,
+    depth: f64, // gain
+}
+
+impl Lfo {
+    pub fn new(freq: f64, sr: f64, depth: f64) -> Self {
+        Self {
+            phase: 0.0,
+            increment: freq / sr,
+            depth,
+        }
+    }
+
+    pub fn next(&mut self) -> f64 {
+        let out = (self.phase * TAU).sin();
+
+        self.phase += self.increment;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0
+        }
+
+        out * self.depth
     }
 }

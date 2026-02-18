@@ -4,16 +4,18 @@ use std::{cmp, thread};
 
 use synth::env::Env;
 use synth::kbd::{self, KeyCode, Keyboard};
-use synth::osc::{Osc, OscKind};
+use synth::osc::{Lfo, Osc, OscKind};
 use synth::preset::Instrument;
 use synth::{Engine, Hz};
 
 #[derive(Default)]
 struct Voice {
-    /// Invariant: voice.alive -> key.is_some()
+    /// Invariant: voice is alive when keycode.is_some()
     keycode: Option<KeyCode>,
+    freq: Hz,
     oscs: Vec<Osc>,
     env: Env,
+    lfo: Lfo,
 }
 
 enum Event {
@@ -52,6 +54,7 @@ impl<const N: usize> Synth<N> {
         };
 
         voice.keycode = Some(code);
+        voice.freq = freq;
 
         voice.oscs.clear();
         for &(kind, gain) in &self.instrument.oscs {
@@ -59,6 +62,8 @@ impl<const N: usize> Synth<N> {
         }
 
         voice.env = Env::new(self.instrument.shape);
+
+        voice.lfo = Lfo::new(self.instrument.lfo.0, SAMPLE_RATE, self.instrument.lfo.1);
     }
 
     fn note_off(&mut self, code: KeyCode) {
@@ -91,16 +96,19 @@ impl<const N: usize> Synth<N> {
                     continue;
                 }
 
-                let sum = voice.oscs.iter_mut().map(|osc| osc.next()).sum::<f64>();
-                let norm = sum / voice.oscs.len() as f64;
+                let pitch = 1.0 + voice.lfo.next().max(0.0);
+                let sum = voice
+                    .oscs
+                    .iter_mut()
+                    .map(|osc| osc.next(pitch))
+                    .sum::<f64>();
 
-                mix += amp * norm;
+                // mix += amp * (sum / voice.oscs.len() as f64);
+                mix += amp * sum;
             }
 
             // master gain
-            mix *= 0.25;
-
-            *sample = mix as f32;
+            *sample = (0.2 * mix) as f32;
         }
     }
 }
@@ -112,8 +120,10 @@ fn main() {
 
     let instrument = Instrument::builder()
         .osc(OscKind::Sine, 1.0)
+        .osc(OscKind::Square, 0.2)
         .osc(OscKind::Triangle, 0.25)
         .osc(OscKind::Saw, 0.1)
+        .lfo(2.5, 0.2)
         .env(0.005, 0.1, 0.8, 0.2)
         .build();
 
