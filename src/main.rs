@@ -1,6 +1,6 @@
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
+use std::{cmp, thread};
 
 use synth::env::Env;
 use synth::kbd::{self, KeyCode, Keyboard};
@@ -42,15 +42,20 @@ impl<const N: usize> Synth<N> {
         } else {
             self.voices
                 .iter_mut()
-                .min_by(|a, b| a.env.amp.partial_cmp(&b.env.amp).unwrap())
+                .min_by(|a, b| {
+                    a.env
+                        .amp
+                        .partial_cmp(&b.env.amp)
+                        .unwrap_or(cmp::Ordering::Equal)
+                })
                 .unwrap()
         };
 
         voice.keycode = Some(code);
 
         voice.oscs.clear();
-        for &kind in &self.instrument.oscs {
-            voice.oscs.push(Osc::new(freq, SAMPLE_RATE, kind));
+        for &(kind, gain) in &self.instrument.oscs {
+            voice.oscs.push(Osc::new(kind, freq, SAMPLE_RATE, gain));
         }
 
         voice.env = Env::new(self.instrument.shape);
@@ -86,7 +91,10 @@ impl<const N: usize> Synth<N> {
                     continue;
                 }
 
-                mix += amp * voice.oscs.iter_mut().map(|osc| osc.next()).sum::<f64>();
+                let sum = voice.oscs.iter_mut().map(|osc| osc.next()).sum::<f64>();
+                let norm = sum / voice.oscs.len() as f64;
+
+                mix += amp * norm;
             }
 
             *sample = (mix * 0.5) as f32;
@@ -100,8 +108,9 @@ fn main() {
     let (tx, rx) = mpsc::channel();
 
     let instrument = Instrument::builder()
-        .osc(OscKind::Sine)
-        .osc(OscKind::Triangle)
+        .osc(OscKind::Sine, 1.0)
+        // .osc(OscKind::Sine, 0.2)
+        .osc(OscKind::Triangle, 0.25)
         .env(0.005, 0.1, 0.8, 0.2)
         .build();
 

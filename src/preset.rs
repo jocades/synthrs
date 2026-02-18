@@ -1,9 +1,11 @@
 use crate::{env, osc::OscKind};
 
-/// An instrument is just a preset / blueprint for a runtime [Voice].
+/// An instrument is just a preset for a runtime [Voice].
 pub struct Instrument {
+    /// The [crate::env::Shape] of an ADSL [crate::env::Env].
     pub shape: env::Shape,
-    pub oscs: Vec<OscKind>,
+    /// [OscKind]s and gains to construct an [crate::osc::Osc].
+    pub oscs: Vec<(OscKind, f64)>,
 }
 
 impl Instrument {
@@ -15,7 +17,7 @@ impl Instrument {
 #[derive(Default)]
 pub struct Builder {
     shape: env::Shape,
-    oscs: Vec<OscKind>,
+    oscs: Vec<(OscKind, f64)>,
 }
 
 impl Builder {
@@ -29,8 +31,8 @@ impl Builder {
         self
     }
 
-    pub fn osc(mut self, kind: OscKind) -> Self {
-        self.oscs.push(kind);
+    pub fn osc(mut self, kind: OscKind, gain: f64) -> Self {
+        self.oscs.push((kind, gain));
         self
     }
 

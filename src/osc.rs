@@ -11,17 +11,19 @@ pub enum OscKind {
 
 #[derive(Default)]
 pub struct Osc {
+    kind: OscKind,
     phase: f64, // 0..1
     increment: f64,
-    kind: OscKind,
+    gain: f64, // 0..1
 }
 
 impl Osc {
-    pub fn new(freq: Hz, sr: f64, kind: OscKind) -> Self {
+    pub fn new(kind: OscKind, freq: Hz, sr: f64, gain: f64) -> Self {
         Self {
             phase: 0.0,
             increment: freq.0 / sr,
             kind,
+            gain,
         }
     }
 
@@ -45,6 +47,6 @@ impl Osc {
             self.phase -= 1.0
         }
 
-        out
+        out * self.gain
     }
 }
