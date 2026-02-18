@@ -1,9 +1,9 @@
-use std::f64::consts::PI;
+use std::f64::consts::{PI, TAU};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use synth::kbd::{self, Keyboard};
+use synth::kbd::{self, KeyCode, Keyboard};
 use synth::{Engine, Hz};
 
 #[derive(Default, PartialEq, Eq)]
@@ -17,7 +17,7 @@ enum EnvelopeState {
 }
 
 #[derive(Default)]
-struct Envelope {
+struct Env {
     attack: f64,
     decay: f64,
     sustain: f64,
@@ -26,7 +26,7 @@ struct Envelope {
     state: EnvelopeState,
 }
 
-impl Envelope {
+impl Env {
     fn new(a: f64, d: f64, s: f64, r: f64) -> Self {
         Self {
             attack: a,
@@ -95,17 +95,63 @@ impl Envelope {
 }
 
 #[derive(Default)]
+enum OscKind {
+    #[default]
+    Sine,
+    Square,
+    Triangle,
+}
+
+#[derive(Default)]
+struct Osc {
+    phase: f64, // 0..1
+    increment: f64,
+    kind: OscKind,
+}
+
+impl Osc {
+    fn new(freq: Hz, sr: f64, kind: OscKind) -> Self {
+        Self {
+            phase: 0.0,
+            increment: freq.0 / sr,
+            kind,
+        }
+    }
+
+    fn next(&mut self) -> f64 {
+        let p = self.phase;
+        let out = match self.kind {
+            OscKind::Sine => (p * TAU).sin(),
+            OscKind::Square => {
+                if p < 0.5 {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
+            OscKind::Triangle => 1.0 - 4.0 * (p - 0.5).abs(),
+        };
+
+        self.phase += self.increment;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0
+        }
+
+        out
+    }
+}
+
+#[derive(Default)]
 struct Voice {
     /// Invariant: voice.alive -> key.is_some()
-    keycode: Option<kbd::KeyCode>,
-    freq: Hz,
-    phase: f64,
-    env: Envelope,
+    keycode: Option<KeyCode>,
+    osc: Osc,
+    env: Env,
 }
 
 enum Event {
-    NoteOn(kbd::KeyCode, Hz),
-    NoteOff(kbd::KeyCode),
+    NoteOn(KeyCode, Hz),
+    NoteOff(KeyCode),
 }
 
 struct Synth<const N: usize = 32> {
@@ -121,7 +167,7 @@ impl<const N: usize> Synth<N> {
         }
     }
 
-    fn note_on(&mut self, code: kbd::KeyCode, freq: Hz) {
+    fn note_on(&mut self, code: KeyCode, freq: Hz) {
         let voice = if let Some(v) = self.voices.iter_mut().find(|v| v.keycode.is_none()) {
             v
         } else {
@@ -132,12 +178,11 @@ impl<const N: usize> Synth<N> {
         };
 
         voice.keycode = Some(code);
-        voice.freq = freq;
-        voice.phase = 0.0;
-        voice.env = Envelope::new(0.1, 0.01, 0.8, 0.2);
+        voice.osc = Osc::new(freq, SAMPLE_RATE, OscKind::Triangle);
+        voice.env = Env::new(0.1, 0.01, 0.8, 0.2);
     }
 
-    fn note_off(&mut self, code: kbd::KeyCode) {
+    fn note_off(&mut self, code: KeyCode) {
         for v in self.voices.iter_mut().filter(|v| v.keycode == Some(code)) {
             v.env.note_off();
         }
@@ -167,12 +212,7 @@ impl<const N: usize> Synth<N> {
                     continue;
                 }
 
-                mix += amp * v.phase.sin();
-
-                v.phase += v.freq.w() * dt;
-                if v.phase > 2.0 * PI {
-                    v.phase -= 2.0 * PI;
-                }
+                mix += amp * v.osc.next();
             }
 
             *sample = (mix * 0.5) as f32;
@@ -207,7 +247,7 @@ fn main() {
             }
         }
 
-        if kbd::is_key_down(kbd::KeyCode::Q) {
+        if kbd::is_key_down(KeyCode::Q) {
             break;
         }
 

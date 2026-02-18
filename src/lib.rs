@@ -3,6 +3,8 @@ pub use engine::Engine;
 
 pub mod kbd;
 
+pub mod osc;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Hz(pub f64);
 
@@ -18,5 +20,11 @@ impl Hz {
         const TWELFTH_ROOT_OF_TWO: f64 = 1.0594630943592952646;
 
         Hz(PITCH_STANDARD * TWELFTH_ROOT_OF_TWO.powi(semitones))
+    }
+}
+
+impl From<f64> for Hz {
+    fn from(x: f64) -> Self {
+        Self(x)
     }
 }
