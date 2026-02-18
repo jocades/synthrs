@@ -1,18 +1,22 @@
 mod engine;
 pub use engine::Engine;
 
+pub mod env;
 pub mod kbd;
-
 pub mod osc;
+
+pub mod consts {
+    pub use std::f64::consts::{PI, TAU};
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Hz(pub f64);
 
 impl Hz {
-    /// Convert frequency (Hz) to angular velocity (ω).
+    /// Convert frequency (Hz) to angular velocity (Rad).
     #[inline(always)]
     pub fn w(&self) -> f64 {
-        self.0 * 2.0 * std::f64::consts::PI
+        self.0 * consts::TAU
     }
 
     pub fn from_pitch_std(semitones: i32) -> Self {
