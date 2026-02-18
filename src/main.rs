@@ -97,7 +97,10 @@ impl<const N: usize> Synth<N> {
                 mix += amp * norm;
             }
 
-            *sample = (mix * 0.5) as f32;
+            // master gain
+            mix *= 0.25;
+
+            *sample = mix as f32;
         }
     }
 }
@@ -109,8 +112,8 @@ fn main() {
 
     let instrument = Instrument::builder()
         .osc(OscKind::Sine, 1.0)
-        // .osc(OscKind::Sine, 0.2)
         .osc(OscKind::Triangle, 0.25)
+        .osc(OscKind::Saw, 0.1)
         .env(0.005, 0.1, 0.8, 0.2)
         .build();
 
