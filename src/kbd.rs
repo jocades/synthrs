@@ -1,4 +1,4 @@
-use synth::Hz;
+use crate::Hz;
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

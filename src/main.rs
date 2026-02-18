@@ -1,15 +1,10 @@
-mod engine;
-mod kbd;
-
 use std::f64::consts::PI;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use engine::Engine;
-use synth::Hz;
-
-use crate::kbd::Keyboard;
+use synth::kbd::{self, Keyboard};
+use synth::{Engine, Hz};
 
 #[derive(Default, PartialEq, Eq)]
 enum EnvelopeState {

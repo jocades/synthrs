@@ -32,7 +32,6 @@ static OSStatus renderCallback(
 }
 
 AudioEngine* audio_engine_new(void* user_data, AudioCallback callback, double sample_rate) {
-  printf("[C] New engine\n");
   AudioEngine* engine = malloc(sizeof(AudioEngine));
   memset(engine, 0, sizeof(AudioEngine));
 
@@ -93,18 +92,15 @@ AudioEngine* audio_engine_new(void* user_data, AudioCallback callback, double sa
 }
 
 void audio_engine_start(AudioEngine* engine) {
-  printf("[C] Start engine\n");
   AudioOutputUnitStart(engine->output_unit);
 }
 
 void audio_engine_stop(AudioEngine* engine) {
-  printf("[C] Stop engine\n");
   AudioOutputUnitStop(engine->output_unit);
 }
 
 void audio_engine_free(AudioEngine* engine) {
   if (!engine) return;
-  printf("[C] Free engine\n");
   AudioUnitUninitialize(engine->output_unit);
   AudioComponentInstanceDispose(engine->output_unit);
   free(engine);
