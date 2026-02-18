@@ -7,24 +7,9 @@ use std::thread;
 use std::time::Duration;
 
 use engine::Engine;
+use synth::Hz;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-struct Hz(f64);
-
-impl Hz {
-    /// Convert frequency (Hz) to angular velocity (ω).
-    #[inline(always)]
-    fn w(&self) -> f64 {
-        self.0 * 2.0 * PI
-    }
-
-    fn from_pitch_std(semitones: i32) -> Self {
-        const PITCH_STANDARD: f64 = 440.0;
-        const TWELFTH_ROOT_OF_TWO: f64 = 1.0594630943592952646;
-
-        Hz(PITCH_STANDARD * TWELFTH_ROOT_OF_TWO.powi(semitones))
-    }
-}
+use crate::kbd::Keyboard;
 
 #[derive(Default, PartialEq, Eq)]
 enum EnvelopeState {
@@ -200,13 +185,6 @@ impl<const N: usize> Synth<N> {
     }
 }
 
-#[derive(Clone, Copy)]
-struct Key {
-    code: kbd::KeyCode,
-    freq: Hz,
-    pressed: bool,
-}
-
 const SAMPLE_RATE: f64 = 44_100.0;
 
 fn main() {
@@ -217,101 +195,10 @@ fn main() {
 
     engine.start();
 
-    let mut keys = [
-        Key {
-            code: kbd::KeyCode::A,
-            freq: Hz::from_pitch_std(-9),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::W,
-            freq: Hz::from_pitch_std(-8),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::S,
-            freq: Hz::from_pitch_std(-7),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::E,
-            freq: Hz::from_pitch_std(-6),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::D,
-            freq: Hz::from_pitch_std(-5),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::F,
-            freq: Hz::from_pitch_std(-4),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::T,
-            freq: Hz::from_pitch_std(-3),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::G,
-            freq: Hz::from_pitch_std(-2),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::Y,
-            freq: Hz::from_pitch_std(-1),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::H,
-            freq: Hz::from_pitch_std(0),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::U,
-            freq: Hz::from_pitch_std(1),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::J,
-            freq: Hz::from_pitch_std(2),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::K,
-            freq: Hz::from_pitch_std(3),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::O,
-            freq: Hz::from_pitch_std(4),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::L,
-            freq: Hz::from_pitch_std(5),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::P,
-            freq: Hz::from_pitch_std(6),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::Semi,
-            freq: Hz::from_pitch_std(7),
-            pressed: false,
-        },
-        Key {
-            code: kbd::KeyCode::Quote,
-            freq: Hz::from_pitch_std(8),
-            pressed: false,
-        },
-    ];
+    let mut keyboard = Keyboard::new();
 
     loop {
-        for key in keys.iter_mut() {
+        for key in keyboard.keys.iter_mut() {
             let down = kbd::is_key_down(key.code);
 
             if down && !key.pressed {
@@ -329,7 +216,7 @@ fn main() {
             break;
         }
 
-        thread::sleep(Duration::from_millis(1));
+        thread::sleep(Duration::from_millis(2));
     }
 
     engine.stop();

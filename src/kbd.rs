@@ -1,3 +1,5 @@
+use synth::Hz;
+
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
@@ -40,21 +42,127 @@ pub fn is_key_down(key: KeyCode) -> bool {
     unsafe { c_is_key_down(key as u16) }
 }
 
-/* struct Keyboard {
-    keys: [Key; 4],
-    map: [Option<usize>; 128], // keycode -> index in `keys`
+#[derive(Clone, Copy)]
+pub struct Key {
+    pub code: KeyCode,
+    pub freq: Hz,
+    pub pressed: bool,
+}
+
+pub struct Keyboard {
+    pub keys: [Key; 18],
+    // map: [Option<usize>; 128], // keycode -> index in `keys`
 }
 
 impl Keyboard {
-    fn press(&mut self, keycode: kbd::KeyCode) {
-        if let Some(index) = self.map[keycode as usize] {
-            self.keys[index].pressed = true;
+    pub fn new() -> Self {
+        Self {
+            keys: [
+                Key {
+                    code: KeyCode::A,
+                    freq: Hz::from_pitch_std(-9),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::W,
+                    freq: Hz::from_pitch_std(-8),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::S,
+                    freq: Hz::from_pitch_std(-7),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::E,
+                    freq: Hz::from_pitch_std(-6),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::D,
+                    freq: Hz::from_pitch_std(-5),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::F,
+                    freq: Hz::from_pitch_std(-4),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::T,
+                    freq: Hz::from_pitch_std(-3),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::G,
+                    freq: Hz::from_pitch_std(-2),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::Y,
+                    freq: Hz::from_pitch_std(-1),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::H,
+                    freq: Hz::from_pitch_std(0),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::U,
+                    freq: Hz::from_pitch_std(1),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::J,
+                    freq: Hz::from_pitch_std(2),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::K,
+                    freq: Hz::from_pitch_std(3),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::O,
+                    freq: Hz::from_pitch_std(4),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::L,
+                    freq: Hz::from_pitch_std(5),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::P,
+                    freq: Hz::from_pitch_std(6),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::Semi,
+                    freq: Hz::from_pitch_std(7),
+                    pressed: false,
+                },
+                Key {
+                    code: KeyCode::Quote,
+                    freq: Hz::from_pitch_std(8),
+                    pressed: false,
+                },
+            ],
         }
     }
 
-    fn release(&mut self, keycode: kbd::KeyCode) {
-        if let Some(index) = self.map[keycode as usize] {
-            self.keys[index].pressed = true;
-        }
+    #[allow(unused)]
+    fn press(&mut self, _keycode: KeyCode) {
+        // if let Some(index) = self.map[keycode as usize] {
+        //     self.keys[index].pressed = true;
+        // }
     }
-} */
+
+    #[allow(unused)]
+    fn release(&mut self, _keycode: KeyCode) {
+        // if let Some(index) = self.map[keycode as usize] {
+        //     self.keys[index].pressed = true;
+        // }
+    }
+}
