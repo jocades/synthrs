@@ -6,7 +6,7 @@ pub struct Instrument {
     pub shape: env::Shape,
     /// [OscKind]s and gains to construct an [crate::osc::Osc].
     pub oscs: Vec<(OscKind, f64)>,
-    pub lfo: (f64, f64), // freq, depth
+    pub lfos: Vec<(f64, f64)>, // freq, depth
 }
 
 impl Instrument {
@@ -19,7 +19,7 @@ impl Instrument {
 pub struct Builder {
     shape: env::Shape,
     oscs: Vec<(OscKind, f64)>,
-    lfo: (f64, f64),
+    lfos: Vec<(f64, f64)>,
 }
 
 impl Builder {
@@ -45,7 +45,7 @@ impl Builder {
     }
 
     pub fn lfo(mut self, freq: f64, depth: f64) -> Self {
-        self.lfo = (freq, depth);
+        self.lfos.push((freq, depth));
         self
     }
 
@@ -53,7 +53,7 @@ impl Builder {
         Instrument {
             shape: self.shape,
             oscs: self.oscs,
-            lfo: self.lfo,
+            lfos: self.lfos,
         }
     }
 }

@@ -13,9 +13,9 @@ struct Voice {
     /// Invariant: voice is alive when keycode.is_some()
     keycode: Option<KeyCode>,
     freq: Hz,
-    oscs: Vec<Osc>,
     env: Env,
-    lfo: Lfo,
+    lfos: Vec<Lfo>,
+    oscs: Vec<Osc>,
 }
 
 enum Event {
@@ -56,14 +56,17 @@ impl<const N: usize> Synth<N> {
         voice.keycode = Some(code);
         voice.freq = freq;
 
+        voice.env = Env::new(self.instrument.shape);
+
+        voice.lfos.clear();
+        for &(rate, depth) in &self.instrument.lfos {
+            voice.lfos.push(Lfo::new(rate, SAMPLE_RATE, depth));
+        }
+
         voice.oscs.clear();
         for &(kind, gain) in &self.instrument.oscs {
             voice.oscs.push(Osc::new(kind, freq, SAMPLE_RATE, gain));
         }
-
-        voice.env = Env::new(self.instrument.shape);
-
-        voice.lfo = Lfo::new(self.instrument.lfo.0, SAMPLE_RATE, self.instrument.lfo.1);
     }
 
     fn note_off(&mut self, code: KeyCode) {
@@ -96,11 +99,12 @@ impl<const N: usize> Synth<N> {
                     continue;
                 }
 
-                let pitch = 1.0 + voice.lfo.next().max(0.0);
+                let scale = 1.0 + voice.lfos.iter_mut().map(|lfo| lfo.next()).sum::<f64>();
+
                 let sum = voice
                     .oscs
                     .iter_mut()
-                    .map(|osc| osc.next(pitch))
+                    .map(|osc| osc.next(scale))
                     .sum::<f64>();
 
                 // mix += amp * (sum / voice.oscs.len() as f64);
