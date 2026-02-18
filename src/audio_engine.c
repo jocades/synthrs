@@ -1,3 +1,4 @@
+#include <ApplicationServices/ApplicationServices.h>
 #include <AudioUnit/AudioUnit.h>
 
 typedef void (*AudioCallback)(void* user_data, float* buffer, uint32_t frame_count);
@@ -107,4 +108,8 @@ void audio_engine_free(AudioEngine* engine) {
   AudioUnitUninitialize(engine->output_unit);
   AudioComponentInstanceDispose(engine->output_unit);
   free(engine);
+}
+
+bool is_key_down(uint16_t keycode) {
+  return CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, keycode);
 }

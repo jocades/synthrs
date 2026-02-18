@@ -9,4 +9,5 @@ fn main() {
         .compile("audio_engine");
 
     println!("cargo::rustc-link-lib=framework=AudioUnit");
+    println!("cargo::rustc-link-lib=framework=ApplicationServices");
 }
