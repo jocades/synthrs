@@ -2,7 +2,7 @@ mod engine;
 mod kbd;
 
 use std::f64::consts::PI;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -26,71 +26,297 @@ impl Hz {
     }
 }
 
-#[derive(Default, Clone, Copy)]
-struct Note {
-    freq: Hz,
-    phase: f64,
-    pressed: bool,
-    alive: bool,
+#[derive(Default, PartialEq, Eq)]
+enum EnvelopeState {
+    #[default]
+    Attack,
+    Decay,
+    Sustain,
+    Release,
+    Finished,
 }
 
-impl Note {
-    fn from_pitch_std(semitones: i32) -> Self {
+#[derive(Default)]
+struct Envelope {
+    attack: f64,
+    decay: f64,
+    sustain: f64,
+    release: f64,
+    level: f64,
+    state: EnvelopeState,
+}
+
+impl Envelope {
+    fn new(a: f64, d: f64, s: f64, r: f64) -> Self {
         Self {
-            freq: Hz::from_pitch_std(semitones),
-            ..Default::default()
+            attack: a,
+            decay: d,
+            sustain: s,
+            release: r,
+            level: 0.0,
+            state: EnvelopeState::Attack,
         }
     }
+
+    fn note_off(&mut self) {
+        if self.state != EnvelopeState::Finished {
+            self.state = EnvelopeState::Release;
+        }
+    }
+
+    fn next(&mut self, dt: f64) -> f64 {
+        match self.state {
+            EnvelopeState::Attack => {
+                if self.attack > 0.0 {
+                    self.level += dt / self.attack;
+                } else {
+                    self.level = 1.0;
+                }
+
+                if self.level >= 1.0 {
+                    self.level = 1.0;
+                    self.state = EnvelopeState::Decay;
+                }
+            }
+
+            EnvelopeState::Decay => {
+                if self.decay > 0.0 {
+                    self.level -= dt * (1.0 - self.sustain) / self.decay;
+                }
+
+                if self.level <= self.sustain {
+                    self.level = self.sustain;
+                    self.state = EnvelopeState::Sustain;
+                }
+            }
+
+            EnvelopeState::Sustain => {}
+
+            EnvelopeState::Release => {
+                if self.release > 0.0 {
+                    self.level -= dt * self.level / self.release;
+                }
+
+                if self.level <= 0.0001 {
+                    self.level = 0.0;
+                    self.state = EnvelopeState::Finished;
+                }
+            }
+
+            EnvelopeState::Finished => {}
+        }
+
+        self.level
+    }
+
+    fn is_finished(&self) -> bool {
+        self.state == EnvelopeState::Finished
+    }
+}
+
+#[derive(Default)]
+struct Voice {
+    /// Invariant: voice.alive -> key.is_some()
+    keycode: Option<kbd::KeyCode>,
+    freq: Hz,
+    phase: f64,
+    env: Envelope,
+}
+
+enum Event {
+    NoteOn(kbd::KeyCode, Hz),
+    NoteOff(kbd::KeyCode),
+}
+
+struct Synth<const N: usize = 32> {
+    voices: [Voice; N],
+    rx: mpsc::Receiver<Event>,
+}
+
+impl<const N: usize> Synth<N> {
+    fn new(rx: mpsc::Receiver<Event>) -> Self {
+        Self {
+            voices: std::array::from_fn(|_| Voice::default()),
+            rx,
+        }
+    }
+
+    fn note_on(&mut self, code: kbd::KeyCode, freq: Hz) {
+        if let Some(v) = self.voices.iter_mut().find(|v| v.keycode.is_none()) {
+            v.keycode = Some(code);
+            v.freq = freq;
+            v.phase = 0.0;
+            v.env = Envelope::new(0.1, 0.01, 0.8, 0.2);
+        }
+        // todo: voice stealing if none free
+    }
+
+    fn note_off(&mut self, code: kbd::KeyCode) {
+        for v in self.voices.iter_mut().filter(|v| v.keycode == Some(code)) {
+            v.env.note_off();
+        }
+    }
+
+    fn process(&mut self, buf: &mut [f32]) {
+        let dt = 1.0 / SAMPLE_RATE;
+
+        while let Ok(event) = self.rx.try_recv() {
+            match event {
+                Event::NoteOn(keycode, freq) => self.note_on(keycode, freq),
+                Event::NoteOff(keycode) => self.note_off(keycode),
+            }
+        }
+
+        for sample in buf {
+            let mut mix = 0.0;
+
+            for v in self.voices.iter_mut().filter(|v| v.keycode.is_some()) {
+                let amp = v.env.next(dt);
+
+                if v.env.is_finished() {
+                    v.keycode = None;
+                    continue;
+                }
+
+                mix += amp * v.phase.sin();
+
+                v.phase += v.freq.w() * dt;
+                if v.phase > 2.0 * PI {
+                    v.phase -= 2.0 * PI;
+                }
+            }
+
+            *sample = (mix * 0.5) as f32;
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Key {
+    code: kbd::KeyCode,
+    freq: Hz,
+    pressed: bool,
 }
 
 const SAMPLE_RATE: f64 = 44_100.0;
 
 fn main() {
-    let piano = [(kbd::Key::A, Note::from_pitch_std(-9))];
-    let piano = Arc::new(Mutex::new(piano));
+    let (tx, rx) = mpsc::channel();
 
-    let engine = {
-        let piano = piano.clone();
-
-        Engine::new(SAMPLE_RATE, move |buf| {
-            let mut piano = piano.lock().unwrap();
-
-            for sample in buf {
-                let mut mix = 0.0f32;
-
-                for (_, note) in piano.iter_mut().filter(|(_, n)| n.alive) {
-                    mix += (0.5 * note.phase.sin()) as f32;
-                    note.phase += note.freq.w() / SAMPLE_RATE;
-                    if note.phase > 2.0 * PI {
-                        note.phase -= 2.0 * PI;
-                    }
-                }
-
-                *sample = mix;
-            }
-        })
-    };
+    let mut synth = Synth::<32>::new(rx);
+    let engine = Engine::new(SAMPLE_RATE, move |buf| synth.process(buf));
 
     engine.start();
 
-    loop {
-        let mut piano = piano.lock().unwrap();
-        for (key, note) in piano.iter_mut() {
-            let pressed = kbd::is_key_down(*key);
+    let mut keys = [
+        Key {
+            code: kbd::KeyCode::A,
+            freq: Hz::from_pitch_std(-9),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::W,
+            freq: Hz::from_pitch_std(-8),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::S,
+            freq: Hz::from_pitch_std(-7),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::E,
+            freq: Hz::from_pitch_std(-6),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::D,
+            freq: Hz::from_pitch_std(-5),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::F,
+            freq: Hz::from_pitch_std(-4),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::T,
+            freq: Hz::from_pitch_std(-3),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::G,
+            freq: Hz::from_pitch_std(-2),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::Y,
+            freq: Hz::from_pitch_std(-1),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::H,
+            freq: Hz::from_pitch_std(0),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::U,
+            freq: Hz::from_pitch_std(1),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::J,
+            freq: Hz::from_pitch_std(2),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::K,
+            freq: Hz::from_pitch_std(3),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::O,
+            freq: Hz::from_pitch_std(4),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::L,
+            freq: Hz::from_pitch_std(5),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::P,
+            freq: Hz::from_pitch_std(6),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::Semi,
+            freq: Hz::from_pitch_std(7),
+            pressed: false,
+        },
+        Key {
+            code: kbd::KeyCode::Quote,
+            freq: Hz::from_pitch_std(8),
+            pressed: false,
+        },
+    ];
 
-            if pressed && !note.pressed {
-                note.pressed = true;
-                note.alive = true;
+    loop {
+        for key in keys.iter_mut() {
+            let down = kbd::is_key_down(key.code);
+
+            if down && !key.pressed {
+                key.pressed = true;
+                _ = tx.send(Event::NoteOn(key.code, key.freq));
             }
 
-            if !pressed && note.pressed {
-                note.pressed = false;
-                note.alive = false;
+            if !down && key.pressed {
+                key.pressed = false;
+                _ = tx.send(Event::NoteOff(key.code));
             }
         }
-        drop(piano);
 
-        if kbd::is_key_down(kbd::Key::Q) {
+        if kbd::is_key_down(kbd::KeyCode::Q) {
             break;
         }
 

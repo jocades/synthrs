@@ -1,7 +1,7 @@
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
-pub enum Key {
+pub enum KeyCode {
     Q = 12,
     W = 13,
     E = 14,
@@ -32,10 +32,29 @@ pub enum Key {
 }
 
 #[inline]
-pub fn is_key_down(key: Key) -> bool {
+pub fn is_key_down(key: KeyCode) -> bool {
     unsafe extern "C" {
         #[link_name = "is_key_down"]
         fn c_is_key_down(keycode: u16) -> bool;
     }
     unsafe { c_is_key_down(key as u16) }
 }
+
+/* struct Keyboard {
+    keys: [Key; 4],
+    map: [Option<usize>; 128], // keycode -> index in `keys`
+}
+
+impl Keyboard {
+    fn press(&mut self, keycode: kbd::KeyCode) {
+        if let Some(index) = self.map[keycode as usize] {
+            self.keys[index].pressed = true;
+        }
+    }
+
+    fn release(&mut self, keycode: kbd::KeyCode) {
+        if let Some(index) = self.map[keycode as usize] {
+            self.keys[index].pressed = true;
+        }
+    }
+} */
