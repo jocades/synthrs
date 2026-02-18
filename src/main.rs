@@ -2,7 +2,7 @@ mod engine;
 mod kbd;
 
 use std::f64::consts::PI;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -94,7 +94,7 @@ impl Envelope {
 
             EnvelopeState::Release => {
                 if self.release > 0.0 {
-                    self.level -= dt * self.level / self.release;
+                    self.level *= (-dt / self.release).exp();
                 }
 
                 if self.level <= 0.0001 {
@@ -142,13 +142,19 @@ impl<const N: usize> Synth<N> {
     }
 
     fn note_on(&mut self, code: kbd::KeyCode, freq: Hz) {
-        if let Some(v) = self.voices.iter_mut().find(|v| v.keycode.is_none()) {
-            v.keycode = Some(code);
-            v.freq = freq;
-            v.phase = 0.0;
-            v.env = Envelope::new(0.1, 0.01, 0.8, 0.2);
-        }
-        // todo: voice stealing if none free
+        let voice = if let Some(v) = self.voices.iter_mut().find(|v| v.keycode.is_none()) {
+            v
+        } else {
+            self.voices
+                .iter_mut()
+                .min_by(|a, b| a.env.level.partial_cmp(&b.env.level).unwrap())
+                .unwrap()
+        };
+
+        voice.keycode = Some(code);
+        voice.freq = freq;
+        voice.phase = 0.0;
+        voice.env = Envelope::new(0.1, 0.01, 0.8, 0.2);
     }
 
     fn note_off(&mut self, code: kbd::KeyCode) {
@@ -160,7 +166,10 @@ impl<const N: usize> Synth<N> {
     fn process(&mut self, buf: &mut [f32]) {
         let dt = 1.0 / SAMPLE_RATE;
 
-        while let Ok(event) = self.rx.try_recv() {
+        for _ in 0..128 {
+            let Ok(event) = self.rx.try_recv() else {
+                break;
+            };
             match event {
                 Event::NoteOn(keycode, freq) => self.note_on(keycode, freq),
                 Event::NoteOff(keycode) => self.note_off(keycode),
