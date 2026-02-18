@@ -125,6 +125,7 @@ fn main() {
         .osc(OscKind::Saw, 0.1)
         .lfo(2.5, 0.2)
         .env(0.005, 0.1, 0.8, 0.2)
+        .oneshot()
         .build();
 
     let mut synth = Synth::<32>::new(rx, instrument);

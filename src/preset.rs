@@ -29,7 +29,13 @@ impl Builder {
             decay: d,
             sustain: s,
             release: r,
+            hold: true,
         };
+        self
+    }
+
+    pub fn oneshot(mut self) -> Self {
+        self.shape.hold = false;
         self
     }
 

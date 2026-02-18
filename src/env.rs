@@ -15,6 +15,7 @@ pub struct Shape {
     pub decay: f64,   // secs
     pub sustain: f64, // amp
     pub release: f64, // secs
+    pub hold: bool,   // wether the sound should sustain
 }
 
 impl Default for Shape {
@@ -24,6 +25,7 @@ impl Default for Shape {
             decay: 0.02,
             sustain: 0.8,
             release: 0.2,
+            hold: true,
         }
     }
 }
@@ -72,7 +74,11 @@ impl Env {
 
                 if self.amp <= self.shape.sustain {
                     self.amp = self.shape.sustain;
-                    self.state = State::Sustain;
+                    self.state = if self.shape.hold {
+                        State::Sustain
+                    } else {
+                        State::Release
+                    };
                 }
             }
 
