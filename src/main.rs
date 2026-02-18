@@ -12,7 +12,7 @@ use synth::{Engine, Hz};
 struct Voice {
     /// Invariant: voice.alive -> key.is_some()
     keycode: Option<KeyCode>,
-    osc: Osc,
+    oscs: Vec<Osc>,
     env: Env,
 }
 
@@ -47,7 +47,12 @@ impl<const N: usize> Synth<N> {
         };
 
         voice.keycode = Some(code);
-        voice.osc = Osc::new(freq, SAMPLE_RATE, self.instrument.oscs[0]);
+
+        voice.oscs.clear();
+        for &kind in &self.instrument.oscs {
+            voice.oscs.push(Osc::new(freq, SAMPLE_RATE, kind));
+        }
+
         voice.env = Env::new(self.instrument.shape);
     }
 
@@ -73,15 +78,15 @@ impl<const N: usize> Synth<N> {
         for sample in buf {
             let mut mix = 0.0;
 
-            for v in self.voices.iter_mut().filter(|v| v.keycode.is_some()) {
-                let amp = v.env.next(dt);
+            for voice in self.voices.iter_mut().filter(|v| v.keycode.is_some()) {
+                let amp = voice.env.next(dt);
 
-                if v.env.is_finished() {
-                    v.keycode = None;
+                if voice.env.is_finished() {
+                    voice.keycode = None;
                     continue;
                 }
 
-                mix += amp * v.osc.next();
+                mix += amp * voice.oscs.iter_mut().map(|osc| osc.next()).sum::<f64>();
             }
 
             *sample = (mix * 0.5) as f32;
