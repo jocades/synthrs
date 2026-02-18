@@ -4,6 +4,7 @@ pub use engine::Engine;
 pub mod env;
 pub mod kbd;
 pub mod osc;
+pub mod preset;
 
 pub mod consts {
     pub use std::f64::consts::{PI, TAU};

@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use synth::env::Env;
 use synth::kbd::{self, KeyCode, Keyboard};
-use synth::osc::{self, Osc};
+use synth::osc::{Osc, OscKind};
+use synth::preset::Instrument;
 use synth::{Engine, Hz};
 
 #[derive(Default)]
@@ -22,13 +23,15 @@ enum Event {
 
 struct Synth<const N: usize = 32> {
     voices: [Voice; N],
+    instrument: Instrument,
     rx: mpsc::Receiver<Event>,
 }
 
 impl<const N: usize> Synth<N> {
-    fn new(rx: mpsc::Receiver<Event>) -> Self {
+    fn new(rx: mpsc::Receiver<Event>, instrument: Instrument) -> Self {
         Self {
             voices: std::array::from_fn(|_| Voice::default()),
+            instrument,
             rx,
         }
     }
@@ -44,8 +47,8 @@ impl<const N: usize> Synth<N> {
         };
 
         voice.keycode = Some(code);
-        voice.osc = Osc::new(freq, SAMPLE_RATE, osc::Kind::Triangle);
-        voice.env = Env::new(0.01, 0.02, 0.8, 0.2);
+        voice.osc = Osc::new(freq, SAMPLE_RATE, self.instrument.oscs[0]);
+        voice.env = Env::new(self.instrument.shape);
     }
 
     fn note_off(&mut self, code: KeyCode) {
@@ -91,7 +94,13 @@ const SAMPLE_RATE: f64 = 44_100.0;
 fn main() {
     let (tx, rx) = mpsc::channel();
 
-    let mut synth = Synth::<32>::new(rx);
+    let instrument = Instrument::builder()
+        .osc(OscKind::Sine)
+        .osc(OscKind::Triangle)
+        .env(0.005, 0.1, 0.8, 0.2)
+        .build();
+
+    let mut synth = Synth::<32>::new(rx, instrument);
     let engine = Engine::new(SAMPLE_RATE, move |buf| synth.process(buf));
 
     engine.start();
