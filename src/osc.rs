@@ -7,6 +7,7 @@ pub enum OscKind {
     Square,
     Triangle,
     Saw,
+    Noise,
 }
 
 #[derive(Default)]
@@ -41,6 +42,7 @@ impl Osc {
             }
             OscKind::Triangle => 1.0 - 4.0 * (p - 0.5).abs(),
             OscKind::Saw => 2.0 * p - 1.0,
+            OscKind::Noise => rand::random_range(-1.0..1.0),
         };
 
         self.phase += self.increment * scale;

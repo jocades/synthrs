@@ -31,6 +31,17 @@ pub enum KeyCode {
     Quote = 39,
     Enter = 36,
     Home = 115,
+
+    Z = 6,
+    X = 7,
+    C = 8,
+    V = 9,
+    B = 11,
+    N = 45,
+    M = 46,
+    Comma = 43,
+    Dot = 47,
+    FSLash = 44,
 }
 
 #[inline]
