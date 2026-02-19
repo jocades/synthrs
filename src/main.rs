@@ -4,19 +4,20 @@ use std::{cmp, thread};
 
 use synth::env::Env;
 use synth::kbd::{self, KeyCode, Keyboard};
-use synth::osc::{Lfo, Osc, OscKind};
+use synth::osc::{Osc, Waveform};
 use synth::preset::{self, Instrument};
 use synth::{Engine, Hz};
 
 #[derive(Default)]
 struct Voice {
     inst_id: usize,
+    /// Wether this voice is _currently_ producing sound
     active: bool,
     /// Midi note 0..128
     note: u8,
     freq: Hz,
     env: Env,
-    lfos: Vec<Lfo>,
+    lfos: Vec<Osc>,
     oscs: Vec<Osc>,
 }
 
@@ -110,15 +111,17 @@ impl<const N: usize> Synth<N> {
         voice.env = Env::new(instrument.shape);
 
         voice.lfos.clear();
-        for &(rate, depth) in &instrument.lfos {
-            voice.lfos.push(Lfo::new(rate, SAMPLE_RATE, depth));
+        for &(waveform, freq, gain) in &instrument.lfos {
+            voice
+                .lfos
+                .push(Osc::new(waveform, freq.into(), SAMPLE_RATE, gain));
         }
 
         voice.oscs.clear();
-        for &(kind, gain) in &instrument.oscs {
+        for &(waveform, gain) in &instrument.oscs {
             voice
                 .oscs
-                .push(Osc::new(kind, voice.freq, SAMPLE_RATE, gain));
+                .push(Osc::new(waveform, voice.freq, SAMPLE_RATE, gain));
         }
     }
 
@@ -165,12 +168,15 @@ impl<const N: usize> Synth<N> {
                     continue;
                 }
 
-                let scale = 1.0 + voice.lfos.iter_mut().map(|lfo| lfo.next()).sum::<f64>();
+                let lfo = voice.lfos.iter_mut().map(|lfo| lfo.next()).sum::<f64>();
 
                 let sum = voice
                     .oscs
                     .iter_mut()
-                    .map(|osc| osc.next(scale))
+                    .map(|osc| {
+                        osc.mod_freq(lfo);
+                        osc.next()
+                    })
                     .sum::<f64>();
 
                 // mix += amp * (sum / voice.oscs.len() as f64);
@@ -245,15 +251,13 @@ impl Sequencer {
 
 const SAMPLE_RATE: f64 = 44_100.0;
 
-fn app() {}
-
 fn main() {
     let (tx, rx) = mpsc::channel();
 
     let instrument = Instrument::builder()
-        .lfo(3.0, 0.02)
-        .osc(OscKind::Sine, 1.0)
-        .osc(OscKind::Saw, 0.2)
+        .lfo(Waveform::Sine, 3.0, 0.02)
+        .osc(Waveform::Sine, 1.0)
+        .osc(Waveform::Saw, 0.2)
         .env(0.002, 0.1, 0.8, 0.2)
         .build();
 
@@ -275,8 +279,6 @@ fn main() {
     seq.add_channel(1, ".xxx.xxx.xxx.xxx");
 
     ratatui::init();
-
-    // let do = [0,3,]
 
     loop {
         seq.update();

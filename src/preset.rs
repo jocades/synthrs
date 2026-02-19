@@ -1,4 +1,4 @@
-use crate::{Hz, env, osc::OscKind};
+use crate::{Hz, env, osc::Waveform};
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Kind {
@@ -13,8 +13,8 @@ pub struct Instrument {
     /// The [crate::env::Shape] of an ADSL [crate::env::Env].
     pub shape: env::Shape,
     /// [OscKind]s and gains to construct an [crate::osc::Osc].
-    pub oscs: Vec<(OscKind, f64)>,
-    pub lfos: Vec<(f64, f64)>, // freq, depth
+    pub oscs: Vec<(Waveform, f64)>,
+    pub lfos: Vec<(Waveform, f64, f64)>, // form, freq, gain
 }
 
 impl Instrument {
@@ -27,8 +27,8 @@ impl Instrument {
 pub struct Builder {
     kind: Kind,
     shape: env::Shape,
-    oscs: Vec<(OscKind, f64)>,
-    lfos: Vec<(f64, f64)>,
+    oscs: Vec<(Waveform, f64)>,
+    pub lfos: Vec<(Waveform, f64, f64)>,
 }
 
 impl Builder {
@@ -58,13 +58,13 @@ impl Builder {
         self
     }
 
-    pub fn osc(mut self, kind: OscKind, gain: f64) -> Self {
-        self.oscs.push((kind, gain));
+    pub fn osc(mut self, form: Waveform, gain: f64) -> Self {
+        self.oscs.push((form, gain));
         self
     }
 
-    pub fn lfo(mut self, freq: f64, depth: f64) -> Self {
-        self.lfos.push((freq, depth));
+    pub fn lfo(mut self, form: Waveform, freq: f64, depth: f64) -> Self {
+        self.lfos.push((form, freq, depth));
         self
     }
 
@@ -82,7 +82,7 @@ impl Builder {
 pub fn kick() -> Instrument {
     Instrument::builder()
         .percussive(60.0)
-        .osc(OscKind::Sine, 1.0)
+        .osc(Waveform::Sine, 1.0)
         .env(0.001, 0.15, 0.0, 0.0)
         .build()
 }
@@ -91,8 +91,8 @@ pub fn kick() -> Instrument {
 pub fn snare() -> Instrument {
     Instrument::builder()
         .percussive(180.0)
-        .osc(OscKind::Noise, 0.2)
-        .osc(OscKind::Sine, 0.5)
+        .osc(Waveform::Noise, 0.2)
+        .osc(Waveform::Sine, 0.5)
         .env(0.001, 0.12, 0.0, 0.0)
         .build()
 }
@@ -100,7 +100,7 @@ pub fn snare() -> Instrument {
 pub fn hihat() -> Instrument {
     Instrument::builder()
         .percussive(0.0)
-        .osc(OscKind::Noise, 0.4)
+        .osc(Waveform::Noise, 0.4)
         .env(0.001, 0.03, 0.0, 0.0)
         .build()
 }
