@@ -12,7 +12,8 @@ use synth::{Engine, Hz};
 struct Voice {
     inst_id: usize,
     active: bool,
-    keycode: Option<KeyCode>,
+    /// Midi note 0..128
+    note: u8,
     freq: Hz,
     env: Env,
     lfos: Vec<Lfo>,
@@ -20,9 +21,32 @@ struct Voice {
 }
 
 enum Event {
-    NoteOn(usize, KeyCode, Hz),
-    NoteOff(usize, KeyCode),
+    NoteOn(usize, u8),
+    NoteOff(usize, u8),
     Trigger(usize),
+}
+
+thread_local! {
+    static FREQ_MAP: [Hz; 18] = [
+        Hz::from_pitch_std(-9),
+        Hz::from_pitch_std(-8),
+        Hz::from_pitch_std(-7),
+        Hz::from_pitch_std(-6),
+        Hz::from_pitch_std(-5),
+        Hz::from_pitch_std(-4),
+        Hz::from_pitch_std(-3),
+        Hz::from_pitch_std(-2),
+        Hz::from_pitch_std(-1),
+        Hz::from_pitch_std(0),
+        Hz::from_pitch_std(1),
+        Hz::from_pitch_std(2),
+        Hz::from_pitch_std(3),
+        Hz::from_pitch_std(4),
+        Hz::from_pitch_std(5),
+        Hz::from_pitch_std(6),
+        Hz::from_pitch_std(7),
+        Hz::from_pitch_std(8),
+    ]
 }
 
 struct Synth<const N: usize = 64> {
@@ -34,7 +58,11 @@ struct Synth<const N: usize = 64> {
 impl<const N: usize> Synth<N> {
     fn new(rx: mpsc::Receiver<Event>, instruments: Vec<Instrument>) -> Self {
         Self {
-            voices: std::array::from_fn(|_| Voice::default()),
+            voices: std::array::from_fn(|_| Voice {
+                oscs: Vec::with_capacity(5),
+                lfos: Vec::with_capacity(5),
+                ..Default::default()
+            }),
             instruments,
             rx,
         }
@@ -60,45 +88,7 @@ impl<const N: usize> Synth<N> {
             .0
     }
 
-    fn note_on(&mut self, inst: usize, code: KeyCode, freq: Hz) {
-        let index = self.find_voice_slot();
-        let voice = &mut self.voices[index];
-
-        voice.inst_id = inst;
-        voice.active = true;
-        voice.keycode = Some(code);
-
-        let instrument = &self.instruments[inst];
-
-        voice.freq = match instrument.kind {
-            preset::Kind::Pitched => freq,
-            preset::Kind::Percussive(freq) => freq,
-        };
-
-        voice.env = Env::new(instrument.shape);
-
-        voice.lfos.clear();
-        for &(rate, depth) in &instrument.lfos {
-            voice.lfos.push(Lfo::new(rate, SAMPLE_RATE, depth));
-        }
-
-        voice.oscs.clear();
-        for &(kind, gain) in &instrument.oscs {
-            voice.oscs.push(Osc::new(kind, freq, SAMPLE_RATE, gain));
-        }
-    }
-
-    fn note_off(&mut self, inst: usize, code: KeyCode) {
-        for v in self
-            .voices
-            .iter_mut()
-            .filter(|v| v.active && v.inst_id == inst && v.keycode == Some(code))
-        {
-            v.env.note_off();
-        }
-    }
-
-    fn trigger(&mut self, inst: usize) {
+    fn init_voice(&mut self, inst: usize, note: Option<u8>) {
         let index = self.find_voice_slot();
         let voice = &mut self.voices[index];
 
@@ -107,10 +97,14 @@ impl<const N: usize> Synth<N> {
 
         let instrument = &self.instruments[inst];
 
-        // assume only drums are trigger for now
-        voice.freq = match instrument.kind {
-            preset::Kind::Pitched => panic!("can only trigger percussive instruments"),
-            preset::Kind::Percussive(freq) => freq,
+        match instrument.kind {
+            preset::Kind::Pitched => {
+                voice.note = note.unwrap();
+                voice.freq = FREQ_MAP.with(|m| m[voice.note as usize]);
+            }
+            preset::Kind::Percussive(freq) => {
+                voice.freq = freq;
+            }
         };
 
         voice.env = Env::new(instrument.shape);
@@ -128,6 +122,24 @@ impl<const N: usize> Synth<N> {
         }
     }
 
+    fn note_on(&mut self, inst: usize, note: u8) {
+        self.init_voice(inst, Some(note));
+    }
+
+    fn note_off(&mut self, inst: usize, note: u8) {
+        for v in self
+            .voices
+            .iter_mut()
+            .filter(|v| v.active && v.inst_id == inst && v.note == note)
+        {
+            v.env.note_off();
+        }
+    }
+
+    fn trigger(&mut self, inst: usize) {
+        self.init_voice(inst, None);
+    }
+
     fn process(&mut self, buf: &mut [f32]) {
         let dt = 1.0 / SAMPLE_RATE;
 
@@ -136,8 +148,8 @@ impl<const N: usize> Synth<N> {
                 break;
             };
             match event {
-                Event::NoteOn(inst, keycode, freq) => self.note_on(inst, keycode, freq),
-                Event::NoteOff(inst, keycode) => self.note_off(inst, keycode),
+                Event::NoteOn(inst, note) => self.note_on(inst, note),
+                Event::NoteOff(inst, note) => self.note_off(inst, note),
                 Event::Trigger(inst) => self.trigger(inst),
             }
         }
@@ -202,15 +214,15 @@ impl Sequencer {
 
     fn update(&mut self) {
         if Instant::now().duration_since(self.last_time) >= self.beat_duration {
-            print!("current_beat = {}", self.current_beat);
+            // print!("current_beat = {}", self.current_beat);
 
             for &(ch, mask) in &self.channels {
                 if mask & (1 << self.current_beat) != 0 {
-                    print!(" *");
+                    // print!(" *");
                     _ = self.tx.send(Event::Trigger(ch));
                 }
             }
-            println!();
+            // println!();
             self.last_time += self.beat_duration;
             self.current_beat = (self.current_beat + 1) % self.total_beats;
         }
@@ -226,21 +238,23 @@ impl Sequencer {
             }
         }
 
-        println!("{inst_id} {pat} {mask:016b} {}", mask.count_ones());
+        // println!("{inst_id} {pat} {mask:016b} {}", mask.count_ones());
         self.channels.push((inst_id, mask));
     }
 }
 
 const SAMPLE_RATE: f64 = 44_100.0;
 
+fn app() {}
+
 fn main() {
     let (tx, rx) = mpsc::channel();
 
     let instrument = Instrument::builder()
-        // .lfo(3.0, 0.02)
+        .lfo(3.0, 0.02)
         .osc(OscKind::Sine, 1.0)
         .osc(OscKind::Saw, 0.2)
-        .env(0.000, 0.1, 0.8, 0.2)
+        .env(0.002, 0.1, 0.8, 0.2)
         .build();
 
     let instruments = vec![instrument, preset::kick(), preset::snare(), preset::hihat()];
@@ -252,25 +266,32 @@ fn main() {
 
     let mut keyboard = Keyboard::new();
 
-    let mut seq = Sequencer::new(90.0, 4, 4, tx.clone());
-    seq.add_channel(1, "xx..x...xx..x...");
-    seq.add_channel(2, "..xx..xx..xx..xx");
-    seq.add_channel(3, "x.x.x.x.x.x.x.xx");
+    let mut seq = Sequencer::new(60.0, 4, 4, tx.clone());
+    // seq.add_channel(1, "x...x...x...x...");
+    // seq.add_channel(2, ".xxx.xxx.xxx.xxx");
+    // seq.add_channel(3, "x.x.x.x.x.x.x.x.");
+
+    seq.add_channel(3, "x...x...x...x...");
+    seq.add_channel(1, ".xxx.xxx.xxx.xxx");
+
+    ratatui::init();
+
+    // let do = [0,3,]
 
     loop {
         seq.update();
 
-        for key in keyboard.keys.iter_mut() {
+        for (note, key) in keyboard.keys.iter_mut().enumerate() {
             let down = kbd::is_key_down(key.code);
 
             if down && !key.pressed {
                 key.pressed = true;
-                _ = tx.send(Event::NoteOn(0, key.code, key.freq));
+                _ = tx.send(Event::NoteOn(0, note as u8));
             }
 
             if !down && key.pressed {
                 key.pressed = false;
-                _ = tx.send(Event::NoteOff(0, key.code));
+                _ = tx.send(Event::NoteOff(0, note as u8));
             }
         }
 
@@ -282,4 +303,6 @@ fn main() {
     }
 
     engine.stop();
+
+    ratatui::restore();
 }

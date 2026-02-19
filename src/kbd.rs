@@ -56,124 +56,106 @@ pub fn is_key_down(key: KeyCode) -> bool {
 #[derive(Clone, Copy)]
 pub struct Key {
     pub code: KeyCode,
-    pub freq: Hz,
+    pub midi: u8,
     pub pressed: bool,
 }
 
 pub struct Keyboard {
     pub keys: [Key; 18],
-    // map: [Option<usize>; 128], // keycode -> index in `keys`
 }
 
 impl Keyboard {
     pub fn new() -> Self {
-        /* let drums = [
-            kbd::Key {
-                code: KeyCode::Z,
-                freq: Hz(60.0),
-                pressed: false,
-            },
-            kbd::Key {
-                code: KeyCode::X,
-                freq: Hz(180.0),
-                pressed: false,
-            },
-            kbd::Key {
-                code: KeyCode::C,
-                freq: Hz(100.0),
-                pressed: false,
-            },
-        ]; */
         Self {
             keys: [
                 Key {
                     code: KeyCode::A,
-                    freq: Hz::from_pitch_std(-9),
+                    midi: 0,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::W,
-                    freq: Hz::from_pitch_std(-8),
+                    midi: 1,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::S,
-                    freq: Hz::from_pitch_std(-7),
+                    midi: 2,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::E,
-                    freq: Hz::from_pitch_std(-6),
+                    midi: 3,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::D,
-                    freq: Hz::from_pitch_std(-5),
+                    midi: 4,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::F,
-                    freq: Hz::from_pitch_std(-4),
+                    midi: 5,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::T,
-                    freq: Hz::from_pitch_std(-3),
+                    midi: 6,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::G,
-                    freq: Hz::from_pitch_std(-2),
+                    midi: 7,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::Y,
-                    freq: Hz::from_pitch_std(-1),
+                    midi: 8,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::H,
-                    freq: Hz::from_pitch_std(0),
+                    midi: 9,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::U,
-                    freq: Hz::from_pitch_std(1),
+                    midi: 10,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::J,
-                    freq: Hz::from_pitch_std(2),
+                    midi: 11,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::K,
-                    freq: Hz::from_pitch_std(3),
+                    midi: 12,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::O,
-                    freq: Hz::from_pitch_std(4),
+                    midi: 13,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::L,
-                    freq: Hz::from_pitch_std(5),
+                    midi: 14,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::P,
-                    freq: Hz::from_pitch_std(6),
+                    midi: 15,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::Semi,
-                    freq: Hz::from_pitch_std(7),
+                    midi: 16,
                     pressed: false,
                 },
                 Key {
                     code: KeyCode::Quote,
-                    freq: Hz::from_pitch_std(8),
+                    midi: 17,
                     pressed: false,
                 },
             ],

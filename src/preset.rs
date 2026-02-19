@@ -100,7 +100,7 @@ pub fn snare() -> Instrument {
 pub fn hihat() -> Instrument {
     Instrument::builder()
         .percussive(0.0)
-        .osc(OscKind::Noise, 0.2)
+        .osc(OscKind::Noise, 0.4)
         .env(0.001, 0.03, 0.0, 0.0)
         .build()
 }
