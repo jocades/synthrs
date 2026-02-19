@@ -25,7 +25,7 @@ enum Event {
     Trigger(usize),
 }
 
-struct Synth<const N: usize = 32> {
+struct Synth<const N: usize = 64> {
     voices: [Voice; N],
     instruments: Vec<Instrument>,
     rx: mpsc::Receiver<Event>,
@@ -171,16 +171,64 @@ impl<const N: usize> Synth<N> {
     }
 }
 
+#[allow(unused)]
 struct Sequencer {
     bpm: f64,
+    beats: u8,
+    sub_beats: u8,
+    beat_duration: Duration,
+    total_beats: usize,
+    current_beat: usize,
+    last_time: Instant,
+    // channels: Vec<(usize, Vec<u8>)>,
+    channels: Vec<(usize, u16)>,
+    tx: mpsc::Sender<Event>,
 }
 
 impl Sequencer {
-    fn new(bpm: f64) -> Self {
-        Self { bpm }
+    fn new(bpm: f64, beats: u8, sub_beats: u8, tx: mpsc::Sender<Event>) -> Self {
+        Self {
+            bpm,
+            beats,
+            sub_beats,
+            beat_duration: Duration::from_secs_f64(60.0 / bpm / sub_beats as f64),
+            current_beat: 0,
+            last_time: Instant::now(),
+            channels: Vec::new(),
+            total_beats: (beats * sub_beats) as usize,
+            tx,
+        }
     }
 
-    fn update(&mut self) {}
+    fn update(&mut self) {
+        if Instant::now().duration_since(self.last_time) >= self.beat_duration {
+            print!("current_beat = {}", self.current_beat);
+
+            for &(ch, mask) in &self.channels {
+                if mask & (1 << self.current_beat) != 0 {
+                    print!(" *");
+                    _ = self.tx.send(Event::Trigger(ch));
+                }
+            }
+            println!();
+            self.last_time += self.beat_duration;
+            self.current_beat = (self.current_beat + 1) % self.total_beats;
+        }
+    }
+
+    fn add_channel(&mut self, inst_id: usize, pat: &str) {
+        assert_eq!(pat.len(), self.total_beats);
+
+        let mut mask = 0u16;
+        for (i, chr) in pat.char_indices() {
+            if chr == 'x' {
+                mask |= 1 << i;
+            }
+        }
+
+        println!("{inst_id} {pat} {mask:016b} {}", mask.count_ones());
+        self.channels.push((inst_id, mask));
+    }
 }
 
 const SAMPLE_RATE: f64 = 44_100.0;
@@ -189,10 +237,10 @@ fn main() {
     let (tx, rx) = mpsc::channel();
 
     let instrument = Instrument::builder()
-        .lfo(3.0, 0.02)
+        // .lfo(3.0, 0.02)
         .osc(OscKind::Sine, 1.0)
         .osc(OscKind::Saw, 0.2)
-        .env(0.005, 0.1, 0.8, 0.2)
+        .env(0.000, 0.1, 0.8, 0.2)
         .build();
 
     let instruments = vec![instrument, preset::kick(), preset::snare(), preset::hihat()];
@@ -204,42 +252,13 @@ fn main() {
 
     let mut keyboard = Keyboard::new();
 
-    // 4x4
-    let bpm = 100.0;
-    let beat_duration = Duration::from_secs_f64(60.0 / bpm / 4.0);
-
-    let mut last_beat = Instant::now();
-    let mut current_beat = 0usize;
-
-    let pat1 = "x...x...x...x...".as_bytes();
-    let pat2 = ".xx...xx.xx...xx".as_bytes();
-
-    let drums = [
-        kbd::Key {
-            code: KeyCode::Z,
-            freq: Hz(60.0),
-            pressed: false,
-        },
-        kbd::Key {
-            code: KeyCode::X,
-            freq: Hz(180.0),
-            pressed: false,
-        },
-        kbd::Key {
-            code: KeyCode::C,
-            freq: Hz(100.0),
-            pressed: false,
-        },
-    ];
+    let mut seq = Sequencer::new(90.0, 4, 4, tx.clone());
+    seq.add_channel(1, "xx..x...xx..x...");
+    seq.add_channel(2, "..xx..xx..xx..xx");
+    seq.add_channel(3, "x.x.x.x.x.x.x.xx");
 
     loop {
-        if Instant::now().duration_since(last_beat) >= beat_duration {
-            if pat1[current_beat] == b'x' {
-                _ = tx.send(Event::Trigger(2))
-            }
-            last_beat += beat_duration;
-            current_beat = (current_beat + 1) % 16;
-        }
+        seq.update();
 
         for key in keyboard.keys.iter_mut() {
             let down = kbd::is_key_down(key.code);

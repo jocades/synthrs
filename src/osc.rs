@@ -45,11 +45,11 @@ impl Osc {
             OscKind::Noise => rand::random_range(-1.0..1.0),
         };
 
-        self.phase += self.increment * scale;
-        // self.phase -= self.phase.floor();
-        if self.phase >= 1.0 {
-            self.phase -= 1.0
-        }
+        self.phase = (self.phase + self.increment * scale) % 1.0;
+        // self.phase += self.increment * scale;
+        // if self.phase >= 1.0 {
+        //     self.phase -= 1.0
+        // }
 
         out * self.gain
     }

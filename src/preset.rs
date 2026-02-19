@@ -39,7 +39,7 @@ impl Builder {
 
     pub fn percussive(mut self, freq: impl Into<Hz>) -> Self {
         self.kind = Kind::Percussive(freq.into());
-        self
+        self.oneshot()
     }
 
     pub fn env(mut self, a: f64, d: f64, s: f64, r: f64) -> Self {
@@ -84,7 +84,6 @@ pub fn kick() -> Instrument {
         .percussive(60.0)
         .osc(OscKind::Sine, 1.0)
         .env(0.001, 0.15, 0.0, 0.0)
-        .oneshot()
         .build()
 }
 
@@ -93,17 +92,15 @@ pub fn snare() -> Instrument {
     Instrument::builder()
         .percussive(180.0)
         .osc(OscKind::Noise, 0.2)
-        .osc(OscKind::Sine, 0.2)
+        .osc(OscKind::Sine, 0.5)
         .env(0.001, 0.12, 0.0, 0.0)
-        .oneshot()
         .build()
 }
 
 pub fn hihat() -> Instrument {
     Instrument::builder()
         .percussive(0.0)
-        .osc(OscKind::Noise, 1.0)
+        .osc(OscKind::Noise, 0.2)
         .env(0.001, 0.03, 0.0, 0.0)
-        .oneshot()
         .build()
 }

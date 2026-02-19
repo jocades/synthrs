@@ -67,6 +67,23 @@ pub struct Keyboard {
 
 impl Keyboard {
     pub fn new() -> Self {
+        /* let drums = [
+            kbd::Key {
+                code: KeyCode::Z,
+                freq: Hz(60.0),
+                pressed: false,
+            },
+            kbd::Key {
+                code: KeyCode::X,
+                freq: Hz(180.0),
+                pressed: false,
+            },
+            kbd::Key {
+                code: KeyCode::C,
+                freq: Hz(100.0),
+                pressed: false,
+            },
+        ]; */
         Self {
             keys: [
                 Key {

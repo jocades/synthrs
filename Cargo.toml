@@ -8,3 +8,4 @@ cc = "1.0"
 
 [dependencies]
 rand = "0.10.0"
+ratatui = "0.30.0"

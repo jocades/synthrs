@@ -89,7 +89,7 @@ impl Env {
                     self.amp *= (-dt / self.shape.release).exp();
                 }
 
-                if self.amp <= 0.0001 {
+                if self.amp <= 0.001 {
                     self.amp = 0.0;
                     self.state = State::Finished;
                 }
